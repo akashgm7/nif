@@ -12,6 +12,7 @@ import pytz
 from services.market_data import market_data_service, INDIAN_INDICES
 from services.signal_engine import signal_engine
 from services.telegram_bot import telegram_service
+from services.chart_service import chart_service
 from core.websocket_manager import manager
 from core.store import (
     add_signal, set_scanner_state, get_scanner_state,
@@ -142,8 +143,11 @@ async def market_scanner():
                         logger.info(f"🎯 GOLDEN SETUP: {symbol} {signal['direction']} | Confidence: {signal['confidence']}%")
                         stored = add_signal(signal)
 
-                        # Send Telegram alert
-                        await telegram_service.send_signal(stored)
+                        # Generate Chart Image
+                        photo_path = chart_service.generate_signal_chart(symbol, df_15m, signal)
+
+                        # Send Telegram alert with Photo
+                        await telegram_service.send_signal(stored, photo_path=photo_path)
 
                         # Broadcast to WebSocket clients
                         await manager.broadcast({"type": "new_signal", "data": stored})

@@ -18,7 +18,7 @@ class TelegramService:
         self.base_url  = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
         self.logger    = logging.getLogger(__name__)
 
-    async def send_signal(self, signal: Dict[str, Any]):
+    async def send_signal(self, signal: Dict[str, Any], photo_path: str = None):
         if not self.bot_token or not self.chat_id:
             self.logger.warning("Telegram credentials not configured.")
             return
@@ -55,12 +55,26 @@ class TelegramService:
 
         async with httpx.AsyncClient() as client:
             try:
-                await client.post(self.base_url, json={
-                    "chat_id": self.chat_id,
-                    "text": message,
-                    "parse_mode": "Markdown",
-                    "disable_web_page_preview": True
-                }, timeout=10)
+                if photo_path and os.path.exists(photo_path):
+                    # Send with photo
+                    url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
+                    with open(photo_path, 'rb') as f:
+                        files = {'photo': f}
+                        data = {
+                            "chat_id": self.chat_id,
+                            "caption": message,
+                            "parse_mode": "Markdown"
+                        }
+                        await client.post(url, data=data, files=files, timeout=30)
+                else:
+                    # Fallback to text only
+                    await client.post(self.base_url, json={
+                        "chat_id": self.chat_id,
+                        "text": message,
+                        "parse_mode": "Markdown",
+                        "disable_web_page_preview": True
+                    }, timeout=10)
+                
                 self.logger.info(f"✅ Telegram alert sent: {signal['symbol']} {direction}")
             except Exception as e:
                 self.logger.error(f"❌ Telegram error: {e}")
