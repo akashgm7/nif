@@ -214,69 +214,61 @@ async def market_scanner():
                     continue
 
                 try:
-                    df_1h, df_15m, df_5m = await market_data_service.get_multi_tf_data(symbol)
-
+                    # ── FETCH ADVANCED CONFLUENCE BUNDLE ──
+                    bundle = await market_data_service.get_advanced_confluence_data(symbol)
+                    df_15m = bundle['dfs'].get('15m')
+                    
                     if df_15m is None or df_15m.empty:
-                        logger.warning(f"⚠️  {symbol}: No 15m data.")
+                        logger.warning(f"⚠️  {symbol}: No data.")
                         continue
-
-                    # Calculate VWAP
-                    if df_15m is not None and not df_15m.empty:
-                        df_15m = market_data_service.calculate_vwap(df_15m)
 
                     curr_price = float(df_15m['close'].iloc[-1])
                     curr_vwap  = float(df_15m['vwap'].iloc[-1]) if 'vwap' in df_15m.columns else 0
 
-                    # Update scanner state
+                    # Update scanner state for dashboard
                     for i, item in enumerate(current_state):
                         if item["symbol"] == symbol:
                             current_state[i].update({
                                 "price": round(curr_price, 2),
                                 "vwap": round(curr_vwap, 2),
-                                "session": session,
-                                "vix": india_vix,
+                                "session": bundle['session'],
+                                "vix": bundle['vix'],
                                 "status": "SCANNING",
-                                "bias": "SEARCHING",
+                                "bias": "ANALYZING",
                             })
                             break
 
                     set_scanner_state(current_state)
                     await manager.broadcast({"type": "scanner_update", "data": current_state})
 
-                    # ── SNIPER ANALYSIS ──
-                    data_bundle = {"1h": df_1h, "15m": df_15m, "5m": df_5m}
-                    signal = await signal_engine.analyze_sniper_setup(
-                        data=data_bundle,
-                        symbol=symbol,
-                        session=session,
-                        is_prime_window=is_prime,
-                        india_vix=india_vix,
-                    )
+                    # ── ADVANCED SNIPER ANALYSIS ──
+                    signal = await signal_engine.analyze_sniper_setup(bundle, symbol)
 
                     if signal:
-                        daily_count = get_daily_signal_count()
-                        if daily_count >= DAILY_SIGNAL_LIMIT:
-                            logger.info(f"⛔ Daily limit {DAILY_SIGNAL_LIMIT} hit. Ignoring {symbol} signal.")
-                            break
+                        rank = signal.get('rank', 'B')
+                        logger.info(f"🎯 INSTITUTIONAL {rank} SETUP: {symbol} {signal['direction']} | Confidence: {signal['confidence']}%")
+                        
+                        # Only alert for A+ and A
+                        if rank in ["A+", "A"]:
+                            stored = add_signal(signal)
 
-                        logger.info(f"🎯 GOLDEN SETUP: {symbol} {signal['direction']} | Confidence: {signal['confidence']}%")
-                        stored = add_signal(signal)
+                            # Generate Chart Image
+                            photo_path = chart_service.generate_signal_chart(symbol, df_15m, signal)
 
-                        # Generate Chart Image
-                        photo_path = chart_service.generate_signal_chart(symbol, df_15m, signal)
+                            # Send Telegram alert with Photo
+                            await telegram_service.send_signal(stored, photo_path=photo_path)
 
-                        # Send Telegram alert with Photo
-                        await telegram_service.send_signal(stored, photo_path=photo_path)
+                            # Broadcast to WebSocket
+                            await manager.broadcast({"type": "new_signal", "data": stored})
 
-                        # Broadcast to WebSocket clients
-                        await manager.broadcast({"type": "new_signal", "data": stored})
-
-                        # Update scanner state entry
-                        for i, item in enumerate(current_state):
-                            if item["symbol"] == symbol:
-                                current_state[i]["status"] = f"SIGNAL — {signal['direction']}"
-                                break
-                        set_scanner_state(current_state)
+                            # Update Dashboard
+                            for i, item in enumerate(current_state):
+                                if item["symbol"] == symbol:
+                                    current_state[i]["status"] = f"{rank} SIGNAL — {signal['direction']}"
+                                    break
+                            set_scanner_state(current_state)
+                        else:
+                            logger.info(f"⏭️  {symbol}: Low rank ({rank}). Filtering for quality.")
 
                 except asyncio.TimeoutError:
                     logger.error(f"⏱️  {symbol}: Data fetch timeout")

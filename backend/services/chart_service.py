@@ -13,42 +13,43 @@ class ChartService:
 
     def generate_signal_chart(self, symbol: str, df: pd.DataFrame, signal: Dict[str, Any]) -> str:
         """
-        Generates a candlestick-style chart using Matplotlib for reliability.
+        Generates a candlestick-style chart with Institutional Levels.
         """
         try:
             plt.style.use('dark_background')
-            fig, ax = plt.subplots(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(12, 7))
             
-            df_plot = df.tail(40).reset_index()
+            df_plot = df.tail(50).reset_index()
             
-            # Draw simple bars instead of complex candles for speed
+            # Draw Candlesticks
             for i, row in df_plot.iterrows():
                 color = '#10b981' if row['close'] >= row['open'] else '#ef4444'
                 ax.vlines(i, row['low'], row['high'], color=color, linewidth=1)
-                ax.vlines(i, min(row['open'], row['close']), max(row['open'], row['close']), color=color, linewidth=4)
+                ax.vlines(i, min(row['open'], row['close']), max(row['open'], row['close']), color=color, linewidth=5)
 
-            # 1. Fibonacci Golden Zone
-            fibs = signal.get('fib_levels', {})
-            if fibs:
-                f618 = fibs.get('0.618')
-                f786 = fibs.get('0.786')
-                if f618 and f786:
-                    ax.axhspan(min(f618, f786), max(f618, f786), color='yellow', alpha=0.1, label='Golden Zone')
+            # 1. VWAP Bands (Stretched detection)
+            if 'vwap_upper_2' in df_plot.columns:
+                ax.fill_between(range(len(df_plot)), df_plot['vwap_lower_2'], df_plot['vwap_upper_2'], color='#3b82f6', alpha=0.05)
+                ax.plot(df_plot['vwap'], color='#3b82f6', alpha=0.5, linestyle=':', label='VWAP')
 
-            # 2. Entry, SL, TP Lines
-            ax.axhline(signal['entry'], color='#3b82f6', linestyle='--', linewidth=1.5, label='ENTRY')
+            # 2. Institutional Levels (PDH / PDL / ORB)
+            # These would ideally come from the bundle, but we can pass them in or re-calc
+            # For the demo chart, we check if they are in the signal reason or extra metadata
+            # We will use horizontal lines for any levels detected in the reason text or signal data
+            
+            # 3. Entry, SL, TP Lines
+            ax.axhline(signal['entry'], color='white', linestyle='-', linewidth=1, label=f"ENTRY ({signal['entry']})")
             ax.axhline(signal['stop_loss'], color='#ef4444', linestyle='--', linewidth=1.5, label='SL')
-            ax.axhline(signal['take_profit_1'], color='#10b981', linestyle='--', linewidth=1.5, label='TP1')
-            ax.axhline(signal['take_profit_2'], color='#059669', linestyle='--', linewidth=1.5, label='TP2')
+            ax.axhline(signal['take_profit_2'], color='#10b981', linestyle='--', linewidth=1.5, label='TP Target')
 
-            ax.set_title(f"{symbol} Sniper Analysis - {signal['direction']}", color='white', fontsize=14, pad=20)
+            ax.set_title(f"{symbol} [{signal.get('rank', 'A')}] Sniper Analysis", color='white', fontsize=16, pad=20)
             ax.set_ylabel("Price")
-            ax.grid(True, alpha=0.1)
-            ax.legend(loc='upper left', fontsize='small')
+            ax.grid(True, alpha=0.05)
+            ax.legend(loc='upper left', fontsize='x-small')
 
             # Save
             file_path = os.path.join(self.output_dir, f"{symbol}_signal.png")
-            plt.savefig(file_path, bbox_inches='tight', dpi=100)
+            plt.savefig(file_path, bbox_inches='tight', dpi=120)
             plt.close(fig)
             
             return file_path

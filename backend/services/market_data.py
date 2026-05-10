@@ -107,17 +107,46 @@ class MarketDataService:
         df = await loop.run_in_executor(None, self._fetch_ohlcv, ticker_symbol, interval)
         return df
 
-    async def get_multi_tf_data(self, symbol: str) -> tuple:
-        """
-        Fetches 1H (bias), 15m (confirmation), 5m (entry) data.
-        Returns (df_1h, df_15m, df_5m)
-        """
-        df_1h, df_15m, df_5m = await asyncio.gather(
-            self.fetch_ohlcv(symbol, '1h'),
-            self.fetch_ohlcv(symbol, '15m'),
-            self.fetch_ohlcv(symbol, '5m'),
-        )
-        return df_1h, df_15m, df_5m
+    async def get_multi_tf_data(self, symbol: str) -> Dict[str, pd.DataFrame]:
+        """Fetches 1H, 15m, 5m, 3m, and 1m data concurrently."""
+        tfs = ['1h', '15m', '5m', '3m', '1m']
+        results = await asyncio.gather(*[self.fetch_ohlcv(symbol, tf) for tf in tfs])
+        return {tf: df for tf, df in zip(tfs, results)}
+
+    def calculate_vwap_bands(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Calculates VWAP with Standard Deviation Bands."""
+        df = self.calculate_vwap(df)
+        # Calculate Rolling Standard Deviation of price vs VWAP
+        df['std'] = df['close'].rolling(window=20).std()
+        df['vwap_upper_1'] = df['vwap'] + (df['std'] * 1.5)
+        df['vwap_lower_1'] = df['vwap'] - (df['std'] * 1.5)
+        df['vwap_upper_2'] = df['vwap'] + (df['std'] * 2.5)
+        df['vwap_lower_2'] = df['vwap'] - (df['std'] * 2.5)
+        return df
+
+    def get_institutional_levels(self, df_1d: pd.DataFrame, df_intraday: pd.DataFrame) -> Dict[str, float]:
+        """Calculates PDH, PDL, PDC and Opening Range."""
+        levels = {}
+        if df_1d is not None and len(df_1d) >= 2:
+            prev_day = df_1d.iloc[-2] # Previous day's row
+            levels['pdh'] = float(prev_day['high'])
+            levels['pdl'] = float(prev_day['low'])
+            levels['pdc'] = float(prev_day['close'])
+
+        # Opening Range (9:15 - 9:30 for 15m ORB)
+        if df_intraday is not None and not df_intraday.empty:
+            df_intraday['timestamp'] = pd.to_datetime(df_intraday['timestamp'])
+            orb_15 = df_intraday[df_intraday['timestamp'].dt.time < time(9, 30)]
+            orb_30 = df_intraday[df_intraday['timestamp'].dt.time < time(9, 45)]
+            
+            if not orb_15.empty:
+                levels['orb_15_high'] = float(orb_15['high'].max())
+                levels['orb_15_low'] = float(orb_15['low'].min())
+            if not orb_30.empty:
+                levels['orb_30_high'] = float(orb_30['high'].max())
+                levels['orb_30_low'] = float(orb_30['low'].min())
+        
+        return levels
 
     def calculate_vwap(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculates session VWAP (resets daily)."""
@@ -149,5 +178,25 @@ class MarketDataService:
         
         # Fallback to last known value or 15.0 (average)
         return getattr(self, '_cached_vix', 15.0)
+
+    async def get_advanced_confluence_data(self, symbol: str) -> Dict[str, Any]:
+        """Aggregates all advanced data points for the Sniper Engine."""
+        dfs = await self.get_multi_tf_data(symbol)
+        df_1d = await self.fetch_ohlcv(symbol, '1d') # Period is 5d by default
+        
+        # Calculate specialized indicators
+        if dfs['15m'] is not None:
+            dfs['15m'] = self.calculate_vwap_bands(dfs['15m'])
+        
+        levels = self.get_institutional_levels(df_1d, dfs['1m'])
+        vix = self.get_india_vix()
+        
+        return {
+            "dfs": dfs,
+            "levels": levels,
+            "vix": vix,
+            "session": self.get_current_session(),
+            "is_prime": self.is_prime_window()
+        }
 
 market_data_service = MarketDataService()
