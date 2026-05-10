@@ -39,12 +39,24 @@ class MarketDataService:
         self.logger = logging.getLogger(__name__)
 
     def is_market_open(self) -> bool:
-        """Development Mode: Always returns True to allow testing after hours."""
-        return True
+        """Production Mode: Respects Indian Market hours (9:15 AM - 3:30 PM IST)."""
+        now_ist = datetime.now(IST).time()
+        return MARKET_OPEN <= now_ist <= MARKET_CLOSE
 
     def get_current_session(self) -> str:
-        """Development Mode: Simulated session."""
-        return "AFTERNOON_TREND"
+        """Production Mode: Actual session detection."""
+        now_ist = datetime.now(IST).time()
+        if not self.is_market_open():
+            return "MARKET_CLOSED"
+        if time(9, 15) <= now_ist <= time(10, 0):
+            return "OPENING_SURGE"
+        if time(10, 0) <= now_ist <= time(11, 30):
+            return "MORNING_MOMENTUM"
+        if time(11, 30) <= now_ist <= time(13, 30):
+            return "MIDDAY_CONSOLIDATION"
+        if time(13, 30) <= now_ist <= time(15, 0):
+            return "AFTERNOON_TREND"
+        return "PRE_CLOSE"
 
     def is_prime_window(self) -> bool:
         """Returns True if we are in a high-probability trading window."""
