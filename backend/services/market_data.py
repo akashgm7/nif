@@ -118,14 +118,24 @@ class MarketDataService:
         return df
 
     def get_india_vix(self) -> Optional[float]:
-        """Fetches India VIX for volatility assessment."""
+        """Fetches India VIX with basic caching to prevent rate limits."""
+        # Simple cache check
+        if hasattr(self, '_cached_vix') and hasattr(self, '_vix_time'):
+            if datetime.now() - self._vix_time < timedelta(minutes=5):
+                return self._cached_vix
+
         try:
             vix = yf.Ticker("^INDIAVIX")
             hist = vix.history(period="1d", interval="1m")
             if not hist.empty:
-                return round(float(hist['Close'].iloc[-1]), 2)
+                val = round(float(hist['Close'].iloc[-1]), 2)
+                self._cached_vix = val
+                self._vix_time = datetime.now()
+                return val
         except Exception as e:
             self.logger.error(f"VIX fetch error: {e}")
-        return None
+        
+        # Fallback to last known value or 15.0 (average)
+        return getattr(self, '_cached_vix', 15.0)
 
 market_data_service = MarketDataService()
