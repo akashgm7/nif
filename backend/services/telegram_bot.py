@@ -60,12 +60,19 @@ class TelegramService:
                     url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
                     with open(photo_path, 'rb') as f:
                         files = {'photo': f}
+                        # Use a simpler message for caption to avoid Markdown errors
+                        caption = message.replace("_", "\\_").replace("*", "").replace("`", "") 
                         data = {
                             "chat_id": self.chat_id,
-                            "caption": message,
+                            "caption": message, # Trying message again but will catch error
                             "parse_mode": "Markdown"
                         }
-                        await client.post(url, data=data, files=files, timeout=30)
+                        r = await client.post(url, data=data, files=files, timeout=30)
+                        if r.status_code != 200:
+                            # Fallback: Send photo with NO caption, then send text separately
+                            self.logger.warning(f"Photo caption failed ({r.status_code}). Sending separately.")
+                            await client.post(url, data={"chat_id": self.chat_id}, files={'photo': open(photo_path, 'rb')}, timeout=30)
+                            await self.send_trade_alert(message)
                 else:
                     # Fallback to text only
                     await client.post(self.base_url, json={
