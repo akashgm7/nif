@@ -113,20 +113,29 @@ class NiftySniperEngine:
                 score += 1
 
         # C7: Prime window bonus
+        # --- SESSION GUARD ---
+        # Allow high-quality signals even during midday, but with higher requirements
+        if session == "MIDDAY_CONSOLIDATION":
+            score_threshold = 6
+            confluence_threshold = 4
+        else:
+            score_threshold = 4
+            confluence_threshold = 3
+
         if is_prime_window:
             confluences.append("✓ Prime Session Window (9:15–11:30 / 13:30–15:00)")
             score += 1
 
-        # --- SNIPER GATE: Need score ≥ 5 (minimum 4 raw confluences) ---
+        # --- SNIPER GATE: Adjusted for better intraday capture ---
         raw_confluences = len([c for c in confluences if c.startswith("✓") and "Prime" not in c])
-        if raw_confluences < 4 or score < 5:
-            self.logger.info(f"{symbol}: Score {score}/required 5, confluences {raw_confluences}/4 — REJECTED")
+        if raw_confluences < confluence_threshold or score < score_threshold:
+            self.logger.info(f"{symbol}: Score {score}/{score_threshold}, confluences {raw_confluences}/{confluence_threshold} — REJECTED")
             return None
 
         # --- RISK MANAGEMENT ---
         risk = self._calculate_risk(curr_price, fib_levels, bias)
-        if risk['rr_ratio'] < 2.0:
-            self.logger.info(f"{symbol}: RR={risk['rr_ratio']:.1f} < 2.0 — REJECTED")
+        if risk['rr_ratio'] < 1.8: # Slightly more flexible RR (was 2.0)
+            self.logger.info(f"{symbol}: RR={risk['rr_ratio']:.1f} < 1.8 — REJECTED")
             return None
 
         confidence = min(65 + (score * 4), 95)
