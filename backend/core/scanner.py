@@ -6,7 +6,7 @@ Max Signals: 4-5 per day TOTAL across all indices combined.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, time
 import pytz
 
 from services.market_data import market_data_service, INDIAN_INDICES
@@ -81,10 +81,59 @@ async def monitor_active_trade(trade: dict, current_price: float):
         )
 
 
+# Lot sizes for profit calculation
+LOT_SIZES = {
+    "NIFTY50": 25,
+    "BANKNIFTY": 15,
+    "FINNIFTY": 40,
+    "MIDCAPNIFTY": 75,
+    "SENSEX": 10
+}
+
+async def generate_eod_report():
+    """Compiles and sends the final performance report for the day."""
+    from core.store import get_signals
+    signals = get_signals(limit=20)
+    today_str = datetime.now(IST).strftime("%Y-%m-%d")
+    
+    # Filter for today's closed signals
+    today_signals = [s for s in signals if s['created_at'].startswith(today_str) and s['status'] == "CLOSED"]
+    
+    if not today_signals:
+        await telegram_service.send_trade_alert("📉 *DAILY RECAP*\nNo trades were taken today. Market conditions did not meet institutional standards.")
+        return
+
+    wins = [s for s in today_signals if s['outcome'] == "WIN"]
+    losses = [s for s in today_signals if s['outcome'] == "LOSS"]
+    total_points = sum([s['pnl_points'] for s in today_signals])
+    
+    # Calculate estimated profit for 1 lot
+    total_profit = 0
+    for s in today_signals:
+        lot_size = LOT_SIZES.get(s['symbol'], 25)
+        total_profit += s['pnl_points'] * lot_size
+
+    report = (
+        f"📊 *DAILY RECAP — {datetime.now(IST).strftime('%d %b %Y')}*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ *Total Trades:* `{len(today_signals)}`\n"
+        f"🏆 *Wins:* `{len(wins)}` | ❌ *Losses:* `{len(losses)}` \n"
+        f"📈 *Win Rate:* `{int(len(wins)/len(today_signals)*100)}%` \n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎯 *Total Points Covered:* `{total_points:,.2f}` pts\n"
+        f"💰 *Est. Profit (1 Lot):* `₹{total_profit:,.2f}`\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏁 _Sniper resting for the day. See you tomorrow!_"
+    )
+    
+    await telegram_service.send_trade_alert(report)
+
+
 async def market_scanner():
     logger.info("🎯 NIFTY SNIPER ENGINE ACTIVE — Indian Index Institutional Scanner")
-
-    initial_state = [
+    eod_sent = False
+    
+    # ... (rest of initial state)
         {
             "symbol": sym,
             "bias": "INITIALIZING",
@@ -102,6 +151,18 @@ async def market_scanner():
 
     while True:
         try:
+            now_ist_dt = datetime.now(IST)
+            now_time = now_ist_dt.time()
+
+            # ── EOD Report Trigger (3:30 PM - 3:35 PM) ──
+            if time(15, 30) <= now_time <= time(15, 35) and not eod_sent:
+                await generate_eod_report()
+                eod_sent = True
+            
+            # Reset EOD flag at midnight or early morning
+            if time(0, 0) <= now_time <= time(9, 0):
+                eod_sent = False
+
             # ── Market Hours Guard ──
             if not market_data_service.is_market_open():
                 now_ist = datetime.now(IST).strftime("%H:%M IST")
