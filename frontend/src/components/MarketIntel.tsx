@@ -10,11 +10,25 @@ const MarketIntel = () => {
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/external/news`)
       .then(res => res.json())
-      .then(data => setNews(data.slice(0, 5)))
+      .then(data => {
+        if (Array.isArray(data)) {
+          setNews(data.slice(0, 5))
+        } else {
+          setNews([])
+        }
+      })
+      .catch(() => setNews([]))
 
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/external/onchain`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/external/institutional`)
       .then(res => res.json())
-      .then(data => setAlerts(data))
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAlerts(data)
+        } else {
+          setAlerts([])
+        }
+      })
+      .catch(() => setAlerts([]))
   }, [])
 
   return (

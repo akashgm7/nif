@@ -7,7 +7,7 @@ import TopNav from "@/components/TopNav";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "QUANT-X | Institutional AI Signal Engine",
+  title: "NIFTY SNIPER | Institutional AI Signal Engine",
   description: "Advanced AI-powered market scanning and institutional signal generation platform.",
 };
 

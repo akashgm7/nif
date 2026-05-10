@@ -36,7 +36,7 @@ const Sidebar = () => {
           <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
             <Zap className="text-[#022c22] w-6 h-6 fill-current" />
           </div>
-          <span className="text-xl font-bold tracking-tight gradient-text">QUANT-X</span>
+          <span className="text-xl font-bold tracking-tight gradient-text">NIFTY SNIPER</span>
         </div>
 
         <nav className="space-y-1">
@@ -67,7 +67,7 @@ const Sidebar = () => {
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
             <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Engine Active</span>
           </div>
-          <p className="text-xs text-slate-500">Scanning 42 pairs across 3 timeframes.</p>
+          <p className="text-xs text-slate-500">Scanning Indian Indices (NIFTY, BANKNIFTY) strictly 9:15-3:30 IST.</p>
         </div>
       </div>
     </div>

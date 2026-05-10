@@ -1,11 +1,14 @@
 fastapi
 uvicorn
-ccxt
+yfinance
 pandas
 numpy
 pydantic-settings
-python-telegram-bot
 python-dotenv
 httpx
 plotly
 kaleido==0.2.1
+pytz
+requests
+aiohttp
+websockets

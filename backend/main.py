@@ -3,6 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.router import api_router
 from core.websocket_manager import manager
 import logging
+import os
+from dotenv import load_dotenv
+
+# Load .env from project root
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,9 +59,13 @@ async def test_telegram():
             "take_profit_2": 3.0,
             "risk_reward": "N/A",
             "confidence": 100,
-            "reasons": ["Scanner is Live", "Multi-Exchange Logic Active", "Connection Verified"]
+            "reasons": ["Scanner is Live", "Indian Market Session Active", "Connection Verified"]
         })
-        return {"status": "success", "message": "Test signal sent to Telegram"}
+        return {
+            "status": "success", 
+            "message": "Test signal sent to Telegram",
+            "token_verified": telegram_service.bot_token[:10] if telegram_service.bot_token else "NONE"
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

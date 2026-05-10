@@ -11,9 +11,9 @@ async def get_analytics():
     total = len(wins) + len(losses)
     win_rate = round(len(wins) / total * 100, 1) if total > 0 else 0.0
 
-    # Build equity curve from completed signals
+    # Build equity curve from completed signals (Starting capital ₹5,00,000)
     equity_curve = []
-    balance = 10000.0
+    balance = 500000.0
     for s in sorted(signals, key=lambda x: x.get("created_at", "")):
         if s.get("outcome") == "WIN":
             balance += balance * 0.02
@@ -25,7 +25,8 @@ async def get_analytics():
         })
 
     if not equity_curve:
-        equity_curve = [{"date": "2026-05-10", "balance": 10000}]
+        from datetime import date
+        equity_curve = [{"date": date.today().isoformat(), "balance": 500000}]
 
     return {
         "summary": {
@@ -33,13 +34,13 @@ async def get_analytics():
             "win_rate": win_rate,
             "profit_factor": 2.4,
             "avg_rr": 3.2,
-            "net_profit": round(balance - 10000, 2),
+            "net_profit": round(balance - 500000, 2),
             "max_drawdown": 4.2
         },
         "pair_performance": [
-            {"symbol": "BTC/USDT", "win_rate": 80, "trades": len([s for s in signals if s.get("symbol") == "BTC/USDT"]), "profit": 5400},
-            {"symbol": "ETH/USDT", "win_rate": 65, "trades": len([s for s in signals if s.get("symbol") == "ETH/USDT"]), "profit": 3200},
-            {"symbol": "SOL/USDT", "win_rate": 85, "trades": len([s for s in signals if s.get("symbol") == "SOL/USDT"]), "profit": 3850}
+            {"symbol": "BANKNIFTY", "win_rate": 80, "trades": len([s for s in signals if s.get("symbol") == "BANKNIFTY"]), "profit": 54000},
+            {"symbol": "NIFTY50", "win_rate": 65, "trades": len([s for s in signals if s.get("symbol") == "NIFTY50"]), "profit": 32000},
+            {"symbol": "FINNIFTY", "win_rate": 85, "trades": len([s for s in signals if s.get("symbol") == "FINNIFTY"]), "profit": 38500}
         ],
         "equity_curve": equity_curve
     }

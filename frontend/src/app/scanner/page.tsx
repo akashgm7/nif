@@ -1,4 +1,5 @@
 "use client"
+// v1.0.1
 
 import React, { useState, useEffect } from 'react'
 import { 
@@ -40,25 +41,41 @@ export default function ScannerPage() {
     fetchData()
 
     // 2. Live WebSocket Updates
-    const socket = new WebSocket(WS_URL)
+    console.log("Connecting to WebSocket:", WS_URL)
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: any = null;
 
-    socket.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data)
-        if (message.type === 'scanner_update') {
-          setData(message.data)
-          setLoading(false)
+    const connect = () => {
+      socket = new WebSocket(WS_URL)
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data)
+          if (message.type === 'scanner_update') {
+            setData(message.data)
+            setLoading(false)
+          }
+        } catch (err) {
+          console.error("WS Parse Error:", err)
         }
-      } catch (err) {
-        console.error("WS Parse Error:", err)
+      }
+
+      socket.onerror = (err) => {
+          console.error("WS Connection Error for URL:", WS_URL, err)
+      }
+
+      socket.onclose = () => {
+          console.log("WS Connection Closed. Reconnecting in 5s...")
+          reconnectTimeout = setTimeout(connect, 5000)
       }
     }
 
-    socket.onerror = (err) => {
-        console.error("WS Connection Error:", err)
-    }
+    connect()
 
-    return () => socket.close()
+    return () => {
+      if (socket) socket.close()
+      if (reconnectTimeout) clearTimeout(reconnectTimeout)
+    }
   }, [API_URL, WS_URL])
 
   return (
@@ -69,7 +86,7 @@ export default function ScannerPage() {
             <Search className="w-8 h-8 text-emerald-500" />
             Market Scanner
           </h1>
-          <p className="text-slate-400">Real-time technical bias across all monitored pairs.</p>
+          <p className="text-slate-400">Real-time technical bias across all monitored indices.</p>
         </div>
         <div className="flex items-center gap-3">
           {error && (
@@ -89,7 +106,7 @@ export default function ScannerPage() {
         <table className="w-full text-left">
           <thead className="bg-slate-900/80 border-b border-slate-800">
             <tr>
-              <th className="px-6 py-4 text-[10px] uppercase font-bold text-slate-500 tracking-widest">Asset</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-bold text-slate-500 tracking-widest">Index</th>
               <th className="px-6 py-4 text-[10px] uppercase font-bold text-slate-500 tracking-widest">Current Price</th>
               <th className="px-6 py-4 text-[10px] uppercase font-bold text-slate-500 tracking-widest">Market Bias</th>
               <th className="px-6 py-4 text-[10px] uppercase font-bold text-slate-500 tracking-widest">Volatility</th>
@@ -109,14 +126,14 @@ export default function ScannerPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center font-bold text-xs">
-                        {item.symbol.split('/')[0][0]}
+                        {item.symbol[0]}
                       </div>
                       <span className="font-bold text-white">{item.symbol}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <span className="font-mono text-slate-300">
-                        {item.price > 0 ? `$${item.price.toLocaleString()}` : 'FETCHING...'}
+                        {item.price > 0 ? `₹${item.price.toLocaleString()}` : 'FETCHING...'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
