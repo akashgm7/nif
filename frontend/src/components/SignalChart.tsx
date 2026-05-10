@@ -37,11 +37,11 @@ const SignalChart: React.FC<SignalChartProps> = ({ symbol, entry, sl, tp }) => {
           },
         })
 
-        if (!chart || typeof chart.addCandlestickSeries !== 'function') {
+        if (!chart || typeof (chart as any).addCandlestickSeries !== 'function') {
             throw new Error("Chart initialization failed");
         }
 
-        const candlestickSeries = chart.addCandlestickSeries({
+        const candlestickSeries = (chart as any).addCandlestickSeries({
           upColor: '#10b981',
           downColor: '#ef4444',
           borderVisible: false,
