@@ -71,11 +71,19 @@ async def test_telegram():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # Accept from any origin
     await manager.connect(websocket)
     try:
+        # Keep connection alive with a simple loop
         while True:
-            await websocket.receive_text()
+            # We just wait for client to close or disconnect
+            data = await websocket.receive_text()
+            # Echo back for heartbeat testing
+            await websocket.send_json({"type": "pong", "data": data})
     except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WS Error: {e}")
         manager.disconnect(websocket)
 
 app.include_router(api_router, prefix="/api/v1")

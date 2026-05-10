@@ -18,10 +18,21 @@ export default function ScannerPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://quant-2.onrender.com/api/v1';
-  const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://quant-2.onrender.com/ws';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+  
+  // Use state for WS_URL to ensure it's calculated on the client
+  const [WS_URL, setWsUrl] = useState('');
 
   useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname;
+    // Default to port 8000 for local dev if no env var is set
+    const fallbackUrl = `${protocol}//${host}:8000/ws`;
+    setWsUrl(process.env.NEXT_PUBLIC_WS_URL || fallbackUrl);
+  }, []);
+
+  useEffect(() => {
+    if (!WS_URL) return;
     // 1. Initial Fetch
     const fetchData = async () => {
       try {
