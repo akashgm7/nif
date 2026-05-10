@@ -22,7 +22,6 @@ INDIAN_INDICES = {
     "FINNIFTY":  "NIFTY_FIN_SERVICE.NS",
     "MIDCAPNIFTY": "^NSMIDCP",
     "SENSEX":    "^BSESN",
-    "BANKEX":    "BSE-BANKEX.BO",
 }
 
 # Market timing
@@ -115,7 +114,7 @@ class MarketDataService:
         df['tp_vol'] = df['tp'] * df['volume']
         # Rolling cumulative for session
         cum_vol = df['volume'].cumsum()
-        df['vwap'] = (df['tp_vol'].cumsum() / cum_vol).replace([np.inf, -np.inf], np.nan).fillna(method='ffill').fillna(df['close'])
+        df['vwap'] = (df['tp_vol'].cumsum() / cum_vol).replace([np.inf, -np.inf], np.nan).ffill().fillna(df['close'])
         return df
 
     def get_india_vix(self) -> Optional[float]:
