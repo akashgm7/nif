@@ -30,6 +30,7 @@ def add_signal(signal: Dict[str, Any]) -> Dict[str, Any]:
     signal["exit_price"] = None
     signal["pnl_points"] = 0.0
     signal["is_breakeven"] = False
+    signal["hit_tp1"] = False
 
     signal_store.append(signal)
     last_signal_times[symbol] = datetime.now(IST)

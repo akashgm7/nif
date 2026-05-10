@@ -16,7 +16,8 @@ from services.chart_service import chart_service
 from core.websocket_manager import manager
 from core.store import (
     add_signal, set_scanner_state, get_scanner_state,
-    is_in_cooldown, get_daily_signal_count, has_active_trade
+    is_in_cooldown, get_daily_signal_count, has_active_trade,
+    get_active_trade
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +32,53 @@ DAILY_SIGNAL_LIMIT = 5
 
 # Cooldown per index: 90 minutes after a signal
 COOLDOWN_MINUTES = 90
+
+async def monitor_active_trade(trade: dict, current_price: float):
+    """
+    Monitors an active signal for TP1, TP2, or SL hits.
+    Sends Telegram follow-ups.
+    """
+    symbol = trade['symbol']
+    direction = trade['direction']
+    tp1 = trade['take_profit_1']
+    tp2 = trade['take_profit_2']
+    sl = trade['stop_loss']
+    
+    # --- 1. SL HIT ---
+    is_sl_hit = (direction == "LONG" and current_price <= sl) or \
+                (direction == "SHORT" and current_price >= sl)
+    
+    if is_sl_hit:
+        pnl = current_price - trade['entry'] if direction == "LONG" else trade['entry'] - current_price
+        from core.store import close_active_trade
+        close_active_trade(outcome="LOSS", exit_price=current_price, pnl_points=pnl)
+        await telegram_service.send_trade_alert(
+            f"❌ *TRADE CLOSED (SL HIT)*\n━━━━━━━━━━━━━━\n📊 *{symbol}*\n📉 *Outcome:* LOSS\n💰 *Exit:* `{current_price:,.2f}`\n📉 *P&L:* `{pnl:,.2f}` pts"
+        )
+        return
+
+    # --- 2. TP1 HIT ---
+    is_tp1_hit = (direction == "LONG" and current_price >= tp1) or \
+                 (direction == "SHORT" and current_price <= tp1)
+                 
+    if is_tp1_hit and not trade.get('hit_tp1'):
+        from core.store import update_signal
+        update_signal(trade['id'], {"hit_tp1": True, "is_breakeven": True, "stop_loss": trade['entry']})
+        await telegram_service.send_trade_alert(
+            f"✅ *TARGET 1 REACHED (TP1)*\n━━━━━━━━━━━━━━\n📊 *{symbol}*\n💰 *Price:* `{current_price:,.2f}`\n🛡️ *Security:* SL moved to ENTRY (Risk Free)"
+        )
+
+    # --- 3. TP2 HIT (Final) ---
+    is_tp2_hit = (direction == "LONG" and current_price >= tp2) or \
+                 (direction == "SHORT" and current_price <= tp2)
+                 
+    if is_tp2_hit:
+        pnl = current_price - trade['entry'] if direction == "LONG" else trade['entry'] - current_price
+        from core.store import close_active_trade
+        close_active_trade(outcome="WIN", exit_price=current_price, pnl_points=pnl)
+        await telegram_service.send_trade_alert(
+            f"🏆 *TARGET 2 REACHED (TP2)*\n━━━━━━━━━━━━━━\n📊 *{symbol}*\n💰 *Final Exit:* `{current_price:,.2f}`\n📈 *Outcome:* WIN\n💰 *Total P&L:* `{pnl:,.2f}` pts"
+        )
 
 
 async def market_scanner():
@@ -64,6 +112,16 @@ async def market_scanner():
                 })
                 await asyncio.sleep(60)
                 continue
+
+            # ── Trade Monitoring ──
+            active_trade = get_active_trade()
+            if active_trade:
+                # We need fresh price for the active trade symbol
+                active_symbol = active_trade['symbol']
+                active_df = await market_data_service.fetch_ohlcv(active_symbol, '1m')
+                if active_df is not None and not active_df.empty:
+                    last_price = float(active_df['close'].iloc[-1])
+                    await monitor_active_trade(active_trade, last_price)
 
             # ── Daily Signal Limit Guard ──
             daily_count = get_daily_signal_count()
