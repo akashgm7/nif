@@ -13,6 +13,7 @@ from services.market_data import market_data_service, INDIAN_INDICES
 from services.signal_engine import signal_engine
 from services.telegram_bot import telegram_service
 from services.chart_service import chart_service
+from services.replay_engine import replay_engine
 from core.websocket_manager import manager
 from core.store import (
     add_signal, set_scanner_state, get_scanner_state,
@@ -55,6 +56,11 @@ async def monitor_active_trade(trade: dict, current_price: float):
         await telegram_service.send_trade_alert(
             f"❌ *TRADE CLOSED (SL HIT)*\n━━━━━━━━━━━━━━\n📊 *{symbol}*\n📉 *Outcome:* LOSS\n💰 *Exit:* `{current_price:,.2f}`\n📉 *P&L:* `{pnl:,.2f}` pts"
         )
+        # Generate and Send Replay
+        replay_path = await replay_engine.generate_trade_replay(trade, df_15m) # Using current 15m context
+        if replay_path:
+            await telegram_service.send_trade_alert("🧠 *NIFTY SNIPER REPLAY ENGINE — ANALYSIS*")
+            await telegram_service.send_signal(trade, photo_path=replay_path)
         return
 
     # --- 2. TP1 HIT ---
@@ -79,6 +85,11 @@ async def monitor_active_trade(trade: dict, current_price: float):
         await telegram_service.send_trade_alert(
             f"🏆 *TARGET 2 REACHED (TP2)*\n━━━━━━━━━━━━━━\n📊 *{symbol}*\n💰 *Final Exit:* `{current_price:,.2f}`\n📈 *Outcome:* WIN\n💰 *Total P&L:* `{pnl:,.2f}` pts"
         )
+        # Generate and Send Replay
+        replay_path = await replay_engine.generate_trade_replay(trade, df_15m)
+        if replay_path:
+            await telegram_service.send_trade_alert("🧠 *NIFTY SNIPER REPLAY ENGINE — ANALYSIS*")
+            await telegram_service.send_signal(trade, photo_path=replay_path)
 
 
 # Lot sizes for profit calculation
